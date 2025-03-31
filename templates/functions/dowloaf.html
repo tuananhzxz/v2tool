@@ -1,0 +1,170 @@
+{% extends "base.html" %} {% block title %}Tải ảnh từ web - Image Processing
+Tools{% endblock %} {% block content %}
+<div class="container">
+  <h2 class="mb-4">Tải ảnh từ web</h2>
+
+  <div class="card">
+    <div class="card-body">
+      <form id="downloadForm">
+        <div class="mb-3">
+          <h4 class="card-title">Tính năng này vẫn còn chưa hoàn thiện mong các bạn thông cảm....</h5>
+          <label for="url" class="form-label">URL ảnh</label>
+          <input
+            type="url"
+            class="form-control"
+            id="url"
+            name="url"
+            placeholder="Nhập URL ảnh"
+            required
+          />
+          <div class="form-text">Ví dụ: https://example.com/image/123.jpg</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-download me-2"></i>Tải ảnh
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Result Section -->
+  <div id="resultArea" class="mt-4" style="display: none">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="card-title">Kết quả tải xuống</h6>
+        <div id="downloadStats" class="alert alert-info mb-3">
+          <!-- Thống kê tải xuống sẽ được thêm vào đây -->
+        </div>
+        <div id="failedDownloads" class="alert alert-warning mb-3" style="display: none">
+          <!-- Danh sách lỗi sẽ được thêm vào đây -->
+        </div>
+        <div id="downloadButtons">
+          <!-- Nút tải xuống sẽ được thêm vào đây -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Highlight active sidebar item
+    document
+      .querySelector('.sidebar-link[href="/dowloaf"]')
+      .classList.add("active");
+
+    // Xử lý form tải ảnh
+    document
+      .getElementById("downloadForm")
+      .addEventListener("submit", async function (e) {
+        e.preventDefault();
+        showLoading();
+
+        const url = document.getElementById("url").value;
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        try {
+          const response = await fetch("/execute/download_images", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ base_url: url }),
+          });
+
+          // Log the raw response for debugging
+          const responseText = await response.text();
+          console.log("Raw response:", responseText);
+          
+          // Parse the JSON manually to avoid issues
+          let result;
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error("JSON parsing error:", parseError);
+            throw new Error("Lỗi khi phân tích dữ liệu từ máy chủ");
+          }
+
+          if (result.error) {
+            Swal.fire({
+              icon: "error",
+              title: "Lỗi!",
+              text: result.error,
+            });
+          } else {
+            // Ensure all required fields exist
+            result.success_count = result.success_count || 0;
+            result.failed_count = result.failed_count || 0;
+            result.failed_urls = result.failed_urls || [];
+            result.output_files = result.output_files || ["downloaded_images.zip"];
+            
+            showDownloadResult(result);
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          Swal.fire({
+            icon: "error",
+            title: "Lỗi!",
+            text: error.message || "Có lỗi xảy ra khi tải ảnh",
+          });
+        } finally {
+          hideLoading();
+          submitBtn.disabled = false;
+        }
+      });
+  });
+
+  // Hiển thị kết quả tải xuống
+  function showDownloadResult(result) {
+    const resultArea = document.getElementById("resultArea");
+    const downloadStats = document.getElementById("downloadStats");
+    const failedDownloads = document.getElementById("failedDownloads");
+    const downloadButtons = document.getElementById("downloadButtons");
+
+    // Hiển thị thống kê
+    downloadStats.innerHTML = `
+      <i class="fas fa-info-circle me-2"></i>
+      Đã tải xuống thành công: ${result.success_count} ảnh
+      ${result.failed_count > 0 ? `| Thất bại: ${result.failed_count} ảnh` : ''}
+    `;
+
+    // Hiển thị danh sách lỗi nếu có
+    if (result.failed_urls && result.failed_urls.length > 0) {
+      failedDownloads.style.display = "block";
+      failedDownloads.innerHTML = `
+        <h6 class="alert-heading">Danh sách lỗi:</h6>
+        <ul class="mb-0">
+          ${result.failed_urls.map(url => `<li>${url}</li>`).join('')}
+        </ul>
+      `;
+    }
+
+    // Hiển thị nút tải xuống
+    downloadButtons.innerHTML = "";
+    
+    // Use a default value for output_files if it's missing
+    const outputFiles = result.output_files || ["downloaded_images.zip"];
+    
+    outputFiles.forEach((file) => {
+      const btn = document.createElement("a");
+      btn.href = `/download/${file}`;
+      btn.className = "btn btn-success me-2";
+      btn.innerHTML = `<i class="fas fa-download me-2"></i>Tải xuống kết quả`;
+      downloadButtons.appendChild(btn);
+    });
+
+    resultArea.style.display = "block";
+  }
+
+  // Hiển thị loading
+  function showLoading() {
+    document.querySelector(".loading").style.display = "flex";
+  }
+
+  // Ẩn loading
+  function hideLoading() {
+    document.querySelector(".loading").style.display = "none";
+  }
+</script>
+{% endblock %}
